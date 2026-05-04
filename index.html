@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cambridge Apartment Map · MIT Sloan</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --ink: #1a1a1a;
+    --muted: #6b6b6b;
+    --line: #e0ddd5;
+    --accent: #8b1a1a;        /* MIT cardinal */
+    --accent-soft: #f2e3e3;
+    --pin-property: #8b1a1a;
+    --pin-anchor: #1a3d6b;    /* deep blue for anchors */
+    --good: #2d6a4f;
+    --warn: #b08900;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: ui-serif, Georgia, "Iowan Old Style", "Apple Garamond", serif;
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .layout {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+  }
+  header {
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  header .sub {
+    color: var(--muted);
+    font-size: 13px;
+    font-style: italic;
+  }
+  header .legend {
+    margin-left: auto;
+    display: flex;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--muted);
+    align-items: center;
+  }
+  .legend-dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+  #map { width: 100%; height: 100%; }
+
+  /* Custom marker styling */
+  .property-marker {
+    background: var(--pin-property);
+    color: white;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: transform 0.12s ease;
+  }
+  .property-marker:hover {
+    transform: scale(1.18);
+  }
+  .anchor-marker {
+    background: var(--pin-anchor);
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    text-align: center;
+    line-height: 1;
+  }
+
+  /* Popup styling */
+  .leaflet-popup-content-wrapper {
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    padding: 0;
+  }
+  .leaflet-popup-content {
+    margin: 0;
+    width: 290px !important;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .popup {
+    padding: 14px 16px 12px;
+  }
+  .popup .name {
+    font-family: ui-serif, Georgia, serif;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.25;
+    margin-bottom: 2px;
+    color: var(--ink);
+  }
+  .popup .addr {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    font-style: italic;
+  }
+  .popup .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 3px 0;
+    font-size: 12.5px;
+    border-bottom: 1px dotted var(--line);
+  }
+  .popup .row:last-of-type { border-bottom: none; }
+  .popup .label {
+    color: var(--muted);
+    font-weight: 500;
+    flex-shrink: 0;
+    margin-right: 8px;
+  }
+  .popup .val {
+    color: var(--ink);
+    text-align: right;
+    font-weight: 500;
+  }
+  .popup .val.empty { color: #c4c4c4; font-weight: 400; }
+  .popup .price {
+    background: var(--accent-soft);
+    margin: 8px -16px;
+    padding: 8px 16px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .popup .price .total {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .popup .price .pp {
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .popup .footer {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    font-style: italic;
+  }
+  .popup .footer .click {
+    color: var(--accent);
+    font-weight: 600;
+    font-style: normal;
+  }
+  .popup .yes { color: var(--good); font-weight: 600; }
+  .popup .no { color: var(--accent); font-weight: 600; }
+
+  .leaflet-popup-tip { background: white; }
+
+  /* Subtle attribution restyling */
+  .leaflet-control-attribution {
+    background: rgba(255,255,255,0.85) !important;
+    font-size: 10px !important;
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <header>
+    <h1>Cambridge apartments</h1>
+    <span class="sub">11 listings · click pin for details · click name to open listing</span>
+    <div class="legend">
+      <span><span class="legend-dot" style="background:var(--pin-property)"></span>Apartment</span>
+      <span><span class="legend-dot" style="background:var(--pin-anchor); border-radius:2px;"></span>Reference (Central T, Sloan)</span>
+    </div>
+  </header>
+  <div id="map"></div>
+</div>
+
+<script>
+const listings = [{"id": 1, "name": "326 Hurley St #1", "address": "326 Hurley St, Cambridge, MA 02141", "lat": 42.3717, "lon": -71.089, "url": "https://www.mitoffcampus.com/housing/property/location-bright-and-sunny-renovated-2-bed-1-bath-avail-9-1-26/ocp4559tyk", "beds": 2, "baths": 1, "rent": 3650, "broker_fee": "Yes", "available": "9/1/26", "sqft": 900, "dishwasher": "Yes", "washer_dryer": "In building", "outdoor": "", "central_t_miles": 0.5, "central_t_mins": 10, "sloan_miles": 1.06, "sloan_mins": 21, "per_person": 1825}, {"id": 2, "name": "2 Columbia St", "address": "2 Columbia St, Cambridge, MA 02139", "lat": 42.368, "lon": -71.101, "url": "https://www.mitoffcampus.com/housing/property/2-columbia-st/t4bnr6b", "beds": 2, "baths": 1, "rent": 3800, "broker_fee": "", "available": "8/1/26", "sqft": 772, "dishwasher": "Yes", "washer_dryer": "In building", "outdoor": "Yes", "central_t_miles": 0.2, "central_t_mins": 4, "sloan_miles": 1.37, "sloan_mins": 27, "per_person": 1900}, {"id": 3, "name": "345 Franklin St", "address": "345 Franklin St, Cambridge, MA 02139", "lat": 42.3645, "lon": -71.1095, "url": "https://www.mitoffcampus.com/housing/property/345-franklin-st/xjlb6kn", "beds": 2, "baths": 2, "rent": 4400, "broker_fee": "", "available": "9/1/26", "sqft": 882, "dishwasher": "Yes", "washer_dryer": "In unit", "outdoor": "Yes", "central_t_miles": 0.3, "central_t_mins": 5, "sloan_miles": 1.85, "sloan_mins": 37, "per_person": 2200}, {"id": 4, "name": "100 Memorial Drive (2BR/1BA)", "address": "100 Memorial Dr, Cambridge, MA 02142", "lat": 42.3577, "lon": -71.0895, "url": "https://www.mitoffcampus.com/housing/property/100-memorial-drive/v3gy97f", "beds": 2, "baths": 1, "rent": 3570, "broker_fee": "No", "available": "5/21/26", "sqft": 700, "dishwasher": "", "washer_dryer": "In building", "outdoor": "Yes", "central_t_miles": 1.26, "central_t_mins": 25, "sloan_miles": 0.53, "sloan_mins": 11, "per_person": 1785}, {"id": 5, "name": "929 Mass Ave (1BR No Fee)", "address": "929 Massachusetts Ave, Cambridge, MA 02139", "lat": 42.3722, "lon": -71.1115, "url": "https://www.mitoffcampus.com/housing/property/move-in-now-sept-prime-central-square-1-bed-renovated-unit-no-fee/ocp61n9lzs", "beds": 1, "baths": 1, "rent": 2400, "broker_fee": "No", "available": "Available Now", "sqft": "", "dishwasher": "Yes", "washer_dryer": "In building", "outdoor": "", "central_t_miles": 0.4, "central_t_mins": 8, "sloan_miles": 2.23, "sloan_mins": 45, "per_person": 2400}, {"id": 6, "name": "345 Franklin (2B2B No Fee)", "address": "345 Franklin St, Cambridge, MA 02139", "lat": 42.3647, "lon": -71.1097, "url": "https://www.mitoffcampus.com/housing/property/june-jul-aug-sep-no-fee-amazing-central-square-2b2b-student-ok-pet-ok/ocp392x59g", "beds": 2, "baths": 2, "rent": 3900, "broker_fee": "No", "available": "6/1/26", "sqft": "", "dishwasher": "Yes", "washer_dryer": "In building", "outdoor": "Yes", "central_t_miles": 0.3, "central_t_mins": 4, "sloan_miles": 1.86, "sloan_mins": 37, "per_person": 1950}, {"id": 7, "name": "784 Main St", "address": "784 Main St, Cambridge, MA 02139", "lat": 42.3635, "lon": -71.0975, "url": "https://www.mitoffcampus.com/housing/property/784-790-796-main-street-apartments/ocp6p3p7kt", "beds": 2, "baths": 1, "rent": 2952, "broker_fee": "No", "available": "Available Now", "sqft": 697, "dishwasher": "", "washer_dryer": "In building", "outdoor": "", "central_t_miles": 0.4, "central_t_mins": 7, "sloan_miles": 0.99, "sloan_mins": 20, "per_person": 1476}, {"id": 8, "name": "141 Prospect St (Duplex)", "address": "141 Prospect St, Cambridge, MA 02139", "lat": 42.368, "lon": -71.1015, "url": "https://www.mitoffcampus.com/housing/property/stunning-2-level-duplex-unit-in-central-square-available-for-rent-6-1-but-flexiable-with-date/ocpbptl4x8", "beds": 2, "baths": 1, "rent": 3900, "broker_fee": "Yes", "available": "6/1/26", "sqft": 1800, "dishwasher": "Yes", "washer_dryer": "In building", "outdoor": "", "central_t_miles": 0.3, "central_t_mins": 5, "sloan_miles": 1.4, "sloan_mins": 28, "per_person": 1950}, {"id": 9, "name": "Clinton & Prospect (270 Harvard)", "address": "270 Harvard St, Cambridge, MA 02139", "lat": 42.369, "lon": -71.101, "url": "https://www.mitoffcampus.com/housing/property/clinton-and-prospect-apartments/0gpfx33", "beds": 2, "baths": 1, "rent": 3105, "broker_fee": "", "available": "Available Now", "sqft": 620, "dishwasher": "Yes", "washer_dryer": "In building", "outdoor": "", "central_t_miles": 0.3, "central_t_mins": 6, "sloan_miles": 1.42, "sloan_mins": 28, "per_person": 1552}, {"id": 10, "name": "101 Western Ave", "address": "101 Western Ave, Cambridge, MA 02139", "lat": 42.3622, "lon": -71.109, "url": "https://www.mitoffcampus.com/housing/property/no-fee-fantastic-location-hbs-mit-redline-train-in-heart-central-sq-heated-laundry/ocp7gph0sx", "beds": 2, "baths": 1, "rent": 3300, "broker_fee": "No", "available": "7/1/26", "sqft": 875, "dishwasher": "", "washer_dryer": "In building", "outdoor": "", "central_t_miles": 0.2, "central_t_mins": 4, "sloan_miles": 1.79, "sloan_mins": 36, "per_person": 1650}, {"id": 11, "name": "Mass Ave (No Fee Charming)", "address": "Massachusetts Ave, Cambridge, MA 02139", "lat": 42.3656, "lon": -71.1038, "url": "https://www.mitoffcampus.com/housing/property/no-feecharming-in-heart-of-central-sq-heat-hot-water-included/ocp5lhxeqn", "beds": 2, "baths": 1, "rent": 3400, "broker_fee": "No", "available": "7/1/26", "sqft": 900, "dishwasher": "Yes", "washer_dryer": "In building", "outdoor": "", "central_t_miles": 0.1, "central_t_mins": 1, "sloan_miles": 1.47, "sloan_mins": 29, "per_person": 1700}];
+
+const CENTRAL_T = [42.3654, -71.1037];
+const SLOAN = [42.3614, -71.0840];
+
+// Initialize map centered between Central Sq and Sloan
+const map = L.map('map', {
+  center: [42.3640, -71.0950],
+  zoom: 15,
+  scrollWheelZoom: true,
+});
+
+// Tile layer — clean, light cartographic style
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap contributors © CARTO',
+  subdomains: 'abcd',
+  maxZoom: 19,
+}).addTo(map);
+
+// Anchor markers (Central T and Sloan)
+const anchorIcon = (label) => L.divIcon({
+  className: '',
+  html: `<div class="anchor-marker">${label}</div>`,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+});
+
+L.marker(CENTRAL_T, { icon: anchorIcon('Central<br>T') })
+  .addTo(map)
+  .bindPopup('<div class="popup"><div class="name">Central Square Station</div><div class="addr">Red Line · Mass Ave & Pearl St</div></div>');
+
+L.marker(SLOAN, { icon: anchorIcon('Sloan<br>E62') })
+  .addTo(map)
+  .bindPopup('<div class="popup"><div class="name">MIT Sloan – Building E62</div><div class="addr">100 Main Street, Cambridge</div></div>');
+
+// Helper to render yes/no/blank values
+function renderVal(v, type) {
+  if (v === '' || v === null || v === undefined) {
+    return '<span class="val empty">—</span>';
+  }
+  if (type === 'yesno') {
+    if (v === 'Yes') return '<span class="val yes">Yes</span>';
+    if (v === 'No') return '<span class="val no">No</span>';
+  }
+  return `<span class="val">${v}</span>`;
+}
+
+// Property markers
+const propIcon = (id) => L.divIcon({
+  className: '',
+  html: `<div class="property-marker">${id}</div>`,
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+});
+
+const bounds = [];
+
+listings.forEach(L_ => {
+  bounds.push([L_.lat, L_.lon]);
+
+  const sqftDisplay = L_.sqft === '' ? '<span class="val empty">—</span>' : `<span class="val">${L_.sqft.toLocaleString()} sq ft</span>`;
+  const ppDisplay = L_.per_person ? `$${L_.per_person.toLocaleString()}/person` : '';
+
+  const popupHTML = `
+    <div class="popup">
+      <div class="name"><a href="${L_.url}" target="_blank" style="color:var(--ink); text-decoration: none; border-bottom: 1px dashed var(--accent);">${L_.name}</a></div>
+      <div class="addr">${L_.address}</div>
+
+      <div class="price">
+        <span class="total">$${L_.rent.toLocaleString()}/mo</span>
+        <span class="pp">${ppDisplay}</span>
+      </div>
+
+      <div class="row"><span class="label">Beds / Baths</span>${renderVal(`${L_.beds} / ${L_.baths}`)}</div>
+      <div class="row"><span class="label">Square footage</span>${sqftDisplay}</div>
+      <div class="row"><span class="label">Available</span>${renderVal(L_.available)}</div>
+      <div class="row"><span class="label">Broker fee</span>${renderVal(L_.broker_fee, 'yesno')}</div>
+      <div class="row"><span class="label">Dishwasher</span>${renderVal(L_.dishwasher, 'yesno')}</div>
+      <div class="row"><span class="label">Washer/dryer</span>${renderVal(L_.washer_dryer)}</div>
+      <div class="row"><span class="label">Outdoor space</span>${renderVal(L_.outdoor, 'yesno')}</div>
+      <div class="row"><span class="label">→ Central T</span>${renderVal(`${L_.central_t_mins} min · ${L_.central_t_miles} mi`)}</div>
+      <div class="row"><span class="label">→ Sloan E62</span>${renderVal(`${L_.sloan_mins} min · ${L_.sloan_miles} mi`)}</div>
+
+      <div class="footer">Click <span class="click">title above</span> to open listing</div>
+    </div>
+  `;
+
+  const marker = L.marker([L_.lat, L_.lon], {
+    icon: propIcon(L_.id),
+    title: `${L_.id}. ${L_.name}`,
+  }).addTo(map);
+
+  marker.bindPopup(popupHTML, { maxWidth: 320, autoPan: true });
+
+  // Open popup on hover (desktop) and tap (mobile)
+  marker.on('mouseover', function () { this.openPopup(); });
+});
+
+// Fit map to all markers (with padding)
+bounds.push(CENTRAL_T, SLOAN);
+map.fitBounds(bounds, { padding: [50, 50] });
+</script>
+</body>
+</html>
